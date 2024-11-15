@@ -95,7 +95,22 @@ vim.g.have_nerd_font = true
 vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
 vim.opt.expandtab = true
-vim.api.nvim_create_user_command('Lz', 'LazyGit', {})
+
+-- remapping esc for lazygit to be double esc
+vim.api.nvim_create_autocmd('TermOpen', {
+  pattern = '*',
+  callback = function()
+    -- Check if the terminal is LazyGit
+    local bufname = vim.fn.expand '<afile>'
+    if bufname:match 'lazygit' then
+      -- Map <Esc> to do nothing in LazyGit
+      vim.keymap.set('t', '<Esc>', '<Esc>', { buffer = true, desc = 'Disable Esc in LazyGit' })
+    else
+      -- Default behavior for other terminals
+      vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { buffer = true, desc = 'Exit terminal mode' })
+    end
+  end,
+})
 
 -- Automatically reselect after indenting in Visual mode
 vim.api.nvim_set_keymap('v', '>', '>gv', { noremap = true, silent = true })
@@ -190,7 +205,7 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 --
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
-vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
+vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- TIP: Disable arrow keys in normal mode
 -- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
