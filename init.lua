@@ -118,6 +118,8 @@ vim.api.nvim_set_keymap('v', '<', '<gv', { noremap = true, silent = true })
 
 -- remapping Ex to NvimTreeToggle
 vim.api.nvim_set_keymap('n', '<leader>e', ':NvimTreeToggle<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<leader>i', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<leader>n', ':bn<CR>', { noremap = true, silent = true, desc = 'next buffer' })
 
 -- Neovim (init.lua)
 vim.api.nvim_create_autocmd('TermOpen', {
@@ -287,7 +289,7 @@ require('lazy').setup({
     -- setting the keybinding for LazyGit with 'keys' is recommended in
     -- order to load the plugin when the command is run for the first time
     keys = {
-      { '<leader>lg', '<cmd>LazyGit<cr>', desc = 'LazyGit' },
+      { '<leader>l', '<cmd>LazyGit<cr>', desc = 'LazyGit' },
     },
   },
   {
