@@ -119,7 +119,9 @@ vim.api.nvim_set_keymap('v', '<', '<gv', { noremap = true, silent = true })
 -- remapping Ex to NvimTreeToggle
 vim.api.nvim_set_keymap('n', '<leader>e', ':NvimTreeToggle<CR>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<leader>i', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
-vim.api.nvim_set_keymap('n', '<leader>n', ':bn<CR>', { noremap = true, silent = true, desc = 'next buffer' })
+vim.api.nvim_set_keymap('n', '<leader>kl', ':bn<CR>', { noremap = true, silent = true, desc = 'next buffer' })
+vim.api.nvim_set_keymap('n', '<leader>kj', ':bp<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
+vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
 
 -- Neovim (init.lua)
 vim.api.nvim_create_autocmd('TermOpen', {
