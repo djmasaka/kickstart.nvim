@@ -121,7 +121,8 @@ vim.api.nvim_set_keymap('n', '<leader>e', ':NvimTreeToggle<CR>', { noremap = tru
 vim.api.nvim_set_keymap('n', '<leader>i', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<leader>kl', ':bn<CR>', { noremap = true, silent = true, desc = 'next buffer' })
 vim.api.nvim_set_keymap('n', '<leader>kj', ':bp<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
-vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
+vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'list buffers' })
+vim.api.nvim_set_keymap('n', '<leader>kd', ':bd<CR>', { noremap = true, silent = true, desc = 'delete buffer' })
 
 -- Neovim (init.lua)
 vim.api.nvim_create_autocmd('TermOpen', {
@@ -809,6 +810,7 @@ require('lazy').setup({
         javascript = { 'prettierd', 'prettier', stop_after_first = true },
         typescript = { 'prettierd', 'prettier', stop_after_first = true },
         typescriptreact = { 'prettierd', 'prettier', stop_after_first = true },
+        scss = { 'prettierd', 'prettier', stop_after_first = true },
       },
     },
   },
