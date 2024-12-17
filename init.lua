@@ -121,7 +121,8 @@ vim.api.nvim_set_keymap('n', '<leader>e', ':NvimTreeToggle<CR>', { noremap = tru
 vim.api.nvim_set_keymap('n', '<leader>i', ':NvimTreeFindFile<CR>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<leader>kl', ':bn<CR>', { noremap = true, silent = true, desc = 'next buffer' })
 vim.api.nvim_set_keymap('n', '<leader>kj', ':bp<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
-vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'previous buffer' })
+vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'show buffers' })
+vim.api.nvim_set_keymap('n', '<leader>kd', ':bd<CR>', { noremap = true, silent = true, desc = 'delete buffer' })
 
 -- Neovim (init.lua)
 vim.api.nvim_create_autocmd('TermOpen', {
@@ -274,6 +275,18 @@ require('lazy').setup({
   --
   -- Use `opts = {}` to force a plugin to be loaded.
   --
+  {
+    'CopilotC-Nvim/CopilotChat.nvim',
+    dependencies = {
+      { 'github/copilot.vim' }, -- or zbirenbaum/copilot.lua
+      { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log and async functions
+    },
+    build = 'make tiktoken', -- Only on MacOS or Linux
+    opts = {
+      -- See Configuration section for options
+    },
+    -- See Commands section for default commands if you want to lazy load on them
+  },
   {
     'kdheepak/lazygit.nvim',
     lazy = true,
@@ -473,7 +486,18 @@ require('lazy').setup({
         --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
         --   },
         -- },
-        -- pickers = {}
+        defaults = {
+          path_display = { 'smart' },
+        },
+        pickers = {
+          buffers = {
+            sort_mru = true,
+            sort_lastused = true,
+            layout_config = {
+              width = 0.9, -- Made wider to accommodate preview
+            },
+          },
+        },
         extensions = {
           ['ui-select'] = {
             require('telescope.themes').get_dropdown(),
@@ -796,7 +820,7 @@ require('lazy').setup({
           lsp_format_opt = 'fallback'
         end
         return {
-          timeout_ms = 500,
+          timeout_ms = 1000,
           lsp_format = lsp_format_opt,
         }
       end,
