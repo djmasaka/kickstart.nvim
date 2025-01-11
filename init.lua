@@ -124,6 +124,16 @@ vim.api.nvim_set_keymap('n', '<leader>kj', ':bp<CR>', { noremap = true, silent =
 vim.api.nvim_set_keymap('n', '<leader>ki', ':ls<CR>', { noremap = true, silent = true, desc = 'list buffers' })
 vim.api.nvim_set_keymap('n', '<leader>kd', ':bd<CR>', { noremap = true, silent = true, desc = 'delete buffer' })
 
+-- mappings for CodeCompanion
+vim.api.nvim_set_keymap('n', '<C-a>', '<cmd>CodeCompanionActions<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('v', '<C-a>', '<cmd>CodeCompanionActions<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<LocalLeader>a', '<cmd>CodeCompanionChat Toggle<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('v', '<LocalLeader>a', '<cmd>CodeCompanionChat Toggle<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('v', '<leader>ca', '<cmd>CodeCompanionChat Add<cr>', { noremap = true, silent = true })
+
+-- Expand 'cc' into 'CodeCompanion' in the command line
+vim.cmd [[cab cc CodeCompanion]]
+
 -- Neovim (init.lua)
 vim.api.nvim_create_autocmd('TermOpen', {
   pattern = '*',
@@ -275,6 +285,49 @@ require('lazy').setup({
   --
   -- Use `opts = {}` to force a plugin to be loaded.
   --
+  -- {
+  --   'jackMort/ChatGPT.nvim',
+  --   event = 'VeryLazy',
+  --   config = function()
+  --     require('chatgpt').setup()
+  --   end,
+  --   dependencies = {
+  --     'MunifTanjim/nui.nvim',
+  --     'nvim-lua/plenary.nvim',
+  --     'folke/trouble.nvim', -- optional
+  --     'nvim-telescope/telescope.nvim',
+  --   },
+  -- },
+  {
+    'olimorris/codecompanion.nvim',
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-treesitter/nvim-treesitter',
+    },
+    strategies = {
+      chat = {
+        adapter = 'openai',
+      },
+      inline = {
+        adapter = 'openai',
+      },
+    },
+    adapters = {
+      openai = function()
+        local openai_adapter = require('codecompanion.adapters').extend('openai', {})
+        -- Read from the environment variable
+        openai_adapter.env.api_key = os.getenv 'OPENAI_API_KEY'
+        return openai_adapter
+      end,
+      anthropic = function()
+        local anthropic_adapter = require('codecompanion.adapters').extend('anthropic', {})
+        -- Read from the environment variable
+        anthropic_adapter.env.api_key = os.getenv 'ANTHROPIC_API_KEY'
+        return anthropic_adapter
+      end,
+    },
+    config = true,
+  },
   {
     'CopilotC-Nvim/CopilotChat.nvim',
     dependencies = {
