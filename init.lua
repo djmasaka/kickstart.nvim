@@ -140,6 +140,22 @@ vim.api.nvim_create_autocmd('TermOpen', {
   command = 'setlocal nonumber norelativenumber',
 })
 
+-- adapters for code companion
+local supported_adapters = {
+  openai = function()
+    local openai_adapter = require('codecompanion.adapters').extend('openai', {})
+    -- Read from the environment variable
+    openai_adapter.env.api_key = os.getenv 'OPENAI_API_KEY'
+    return openai_adapter
+  end,
+  anthropic = function()
+    local anthropic_adapter = require('codecompanion.adapters').extend('anthropic', {})
+    -- Read from the environment variable
+    anthropic_adapter.env.api_key = os.getenv 'ANTHROPIC_API_KEY'
+    return anthropic_adapter
+  end,
+}
+
 -- [[ Setting options ]]
 -- See `:help vim.opt`
 -- NOTE: You can change these options as you wish!
@@ -299,17 +315,28 @@ require('lazy').setup({
   --   },
   -- },
   {
+    'ibhagwan/fzf-lua',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      -- Optional configuration code goes here
+      -- Example: Set up a keybinding for fzf-lua
+      vim.api.nvim_set_keymap('n', '<Leader>ff', ":lua require('fzf-lua').files()<CR>", { noremap = true, silent = true })
+    end,
+  },
+  {
     'olimorris/codecompanion.nvim',
     dependencies = {
       'nvim-lua/plenary.nvim',
       'nvim-treesitter/nvim-treesitter',
     },
-    strategies = {
-      chat = {
-        adapter = 'openai',
-      },
-      inline = {
-        adapter = 'openai',
+    opts = {
+      strategies = {
+        chat = {
+          adapter = 'openai',
+        },
+        inline = {
+          adapter = 'openai',
+        },
       },
     },
     adapters = {
@@ -1151,6 +1178,89 @@ require('lazy').setup({
     },
   },
 })
+
+local function save_path()
+  local Path = require 'plenary.path'
+  local p = Path:new(vim.fn.stdpath 'data' .. '/codecompanion_chats')
+  p:mkdir { parents = true }
+  return p
+end
+
+vim.api.nvim_create_user_command('CodeCompanionLoad', function()
+  local fzf = require 'fzf-lua'
+
+  local function select_adapter(filepath)
+    local adapters = vim.tbl_keys(supported_adapters)
+
+    fzf.fzf_exec(adapters, {
+      prompt = 'Select CodeCompanion Adapter> ',
+      actions = {
+        ['default'] = function(selected)
+          local adapter = selected[1]
+          -- Open new CodeCompanion chat with selected adapter
+          vim.cmd('CodeCompanionChat ' .. adapter)
+
+          -- Read contents of saved chat file
+          local lines = vim.fn.readfile(filepath)
+
+          -- Get the current buffer (which should be the new CodeCompanion chat)
+          local current_buf = vim.api.nvim_get_current_buf()
+
+          -- Paste contents into the new chat buffer
+          vim.api.nvim_buf_set_lines(current_buf, 0, -1, false, lines)
+        end,
+      },
+    })
+  end
+
+  local function start_picker()
+    local files = vim.fn.glob(save_path() .. '/*', false, true)
+
+    fzf.fzf_exec(files, {
+      prompt = 'Saved CodeCompanion Chats | <c-r>: remove >',
+      previewer = 'builtin',
+      actions = {
+        ['default'] = function(selected)
+          if #selected > 0 then
+            local filepath = selected[1]
+            select_adapter(filepath)
+          end
+        end,
+        ['ctrl-r'] = function(selected)
+          if #selected > 0 then
+            local filepath = selected[1]
+            os.remove(filepath)
+            -- Refresh the picker
+            start_picker()
+          end
+        end,
+      },
+    })
+  end
+
+  start_picker()
+end, {})
+
+--- Save the current codecompanion.nvim chat buffer to a file in the save_folder.
+--- Usage: CodeCompanionSave <filename>.md
+---@param opts table
+vim.api.nvim_create_user_command('CodeCompanionSave', function(opts)
+  local codecompanion = require 'codecompanion'
+  local success, chat = pcall(function()
+    return codecompanion.buf_get_chat(0)
+  end)
+  if not success or chat == nil then
+    vim.notify('CodeCompanionSave should only be called from CodeCompanion chat buffers', vim.log.levels.ERROR)
+    return
+  end
+  if #opts.fargs == 0 then
+    vim.notify('CodeCompanionSave requires at least 1 arg to make a file name', vim.log.levels.ERROR)
+  end
+  local save_name = table.concat(opts.fargs, '-') .. '.md'
+  local save_file = save_path():joinpath(save_name)
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  save_file:write(table.concat(lines, '\n'), 'w')
+end, { nargs = '*' })
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
