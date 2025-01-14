@@ -130,12 +130,12 @@ vim.api.nvim_set_keymap('v', '<C-a>', '<cmd>CodeCompanionActions<cr>', { noremap
 vim.api.nvim_set_keymap('n', '<LocalLeader>a', '<cmd>CodeCompanionChat Toggle<cr>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('v', '<LocalLeader>a', '<cmd>CodeCompanionChat Toggle<cr>', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('v', '<leader>ca', '<cmd>CodeCompanionChat Add<cr>', { noremap = true, silent = true })
-vim.api.nvim_set_keymap(
-  'n',
-  '<LocalLeader>cs',
-  [[:lua local name = vim.fn.input("Save as: "); if name and name ~= "" then vim.cmd("CodeCompanionSave " .. name) end<CR>]],
-  { noremap = true, silent = true, expr = false }
-)
+vim.keymap.set('n', '<LocalLeader>cs', function()
+  local name = vim.fn.input 'Save as: '
+  if name and name ~= '' then
+    vim.cmd('CodeCompanionSave ' .. name)
+  end
+end, { desc = 'CodeCompanion Save chat' })
 vim.api.nvim_set_keymap('n', '<LocalLeader>cl', '<cmd>CodeCompanionLoad<cr>', { noremap = true, silent = true })
 
 -- Expand 'cc' into 'CodeCompanion' in the command line
