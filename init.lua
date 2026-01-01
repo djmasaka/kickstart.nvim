@@ -397,7 +397,13 @@ require('lazy').setup({
         return openai_adapter
       end,
       anthropic = function()
-        local anthropic_adapter = require('codecompanion.adapters').extend('anthropic', {})
+        local anthropic_adapter = require('codecompanion.adapters').extend('anthropic', {
+          schema = {
+            model = {
+              default = 'claude-3-5-haiku-20241022',
+            },
+          },
+        })
         -- Read from the environment variable
         anthropic_adapter.env.api_key = os.getenv 'ANTHROPIC_API_KEY'
         return anthropic_adapter
