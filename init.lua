@@ -94,7 +94,17 @@ vim.g.maplocalleader = ' '
 vim.g.have_nerd_font = true
 vim.opt.tabstop = 4
 vim.opt.shiftwidth = 4
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'typescriptreact',
+  callback = function()
+    vim.opt_local.tabstop = 2
+    vim.opt_local.shiftwidth = 2
+    vim.opt_local.expandtab = true
+  end,
+})
 vim.opt.expandtab = true
+vim.opt.rtp:append '/Users/davidmasaka/homebrew/opt/fzf'
+vim.opt.iskeyword:remove '_'
 
 -- remapping esc for lazygit to be double esc
 vim.api.nvim_create_autocmd('TermOpen', {
@@ -158,6 +168,12 @@ local supported_adapters = {
     -- Read from the environment variable
     anthropic_adapter.env.api_key = os.getenv 'ANTHROPIC_API_KEY'
     return anthropic_adapter
+  end,
+  gemini = function()
+    local gemini_adapter = require('codecompanion.adapters').extend('gemini', {})
+    -- Read from the environment variable
+    gemini_adapter.env.api_key = os.getenv 'GEMINI_API_KEY'
+    return gemini_adapter
   end,
 }
 
@@ -298,7 +314,6 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
-  'github/copilot.vim',
 
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
@@ -319,10 +334,40 @@ require('lazy').setup({
   --     'nvim-telescope/telescope.nvim',
   --   },
   -- },
+  -- {
+  --   'williamboman/mason.nvim',
+  --   tag = '^1.0.0', -- Use a specific version tag
+  --   priority = 100, -- Load early
+  --   config = true,
+  -- },
+  -- {
+  --   'williamboman/mason-lspconfig.nvim',
+  --   tag = '^1.0.0', -- Use a specific version tag
+  --   dependencies = { 'williamboman/mason.nvim' },
+  -- },
+  -- 'WhoIsSethDaniel/mason-tool-installer.nvim',
+
   {
     'ibhagwan/fzf-lua',
     dependencies = { 'nvim-lua/plenary.nvim' },
     config = function()
+      local fzf = require 'fzf-lua'
+
+      -- Configure fzf-lua settings, including keymaps for live pickers
+      fzf.setup {
+        actions = {
+          fzf = {
+            -- This keymap applies to live pickers like live_grep
+            live_action = {
+              -- <C-g> will toggle the fuzzy matching on/off inside the live results window.
+              ['<C-g>'] = 'fzf_toggle_fuzzy',
+              -- Alternatively, you could use a different key, e.g., '<C-f>'
+              -- ['<C-f>'] = 'fzf_toggle_fuzzy',
+            },
+          },
+        },
+      }
+
       -- Optional configuration code goes here
       -- Example: Set up a keybinding for fzf-lua
       vim.api.nvim_set_keymap('n', '<Leader>ff', ":lua require('fzf-lua').files()<CR>", { noremap = true, silent = true })
@@ -337,10 +382,10 @@ require('lazy').setup({
     opts = {
       strategies = {
         chat = {
-          adapter = 'openai',
+          adapter = 'gemini',
         },
         inline = {
-          adapter = 'openai',
+          adapter = 'gemini',
         },
       },
     },
@@ -357,20 +402,15 @@ require('lazy').setup({
         anthropic_adapter.env.api_key = os.getenv 'ANTHROPIC_API_KEY'
         return anthropic_adapter
       end,
+      gemini = function()
+        local gemini_adapter = require('codecompanion.adapters').extend('gemini', {})
+        -- Read from the environment variable
+        gemini_adapter.env.api_key = os.getenv 'GEMINI_API_KEY'
+        gemini_adapter.model = 'gemini-3-pro-preview' -- Specify the Gemini model
+        return gemini_adapter
+      end,
     },
     config = true,
-  },
-  {
-    'CopilotC-Nvim/CopilotChat.nvim',
-    dependencies = {
-      { 'github/copilot.vim' }, -- or zbirenbaum/copilot.lua
-      { 'nvim-lua/plenary.nvim', branch = 'master' }, -- for curl, log and async functions
-    },
-    build = 'make tiktoken', -- Only on MacOS or Linux
-    opts = {
-      -- See Configuration section for options
-    },
-    -- See Commands section for default commands if you want to lazy load on them
   },
   {
     'kdheepak/lazygit.nvim',
@@ -397,7 +437,34 @@ require('lazy').setup({
     version = '*',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
     config = function()
-      require('nvim-tree').setup {}
+      require('nvim-tree').setup {
+        view = {
+          adaptive_size = true, -- Automatically adjusts width based on content
+          side = 'left',
+        },
+        filters = {
+          dotfiles = false, -- Show dotfiles like .env
+        },
+        git = {
+          ignore = true, -- Show files ignored by .gitignore
+        },
+      }
+    end,
+  },
+
+  -- zoekt plugin
+  {
+    'jupblb/zoekt.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim', 'nvim-telescope/telescope.nvim' },
+    config = function()
+      -- Zoekt keymaps
+      vim.keymap.set('n', '<leader>sz', '<cmd>ZoektSearch<CR>', { desc = '[S]earch with [Z]oekt' })
+      vim.keymap.set('n', '<leader>si', '<cmd>ZoektIndex<CR>', { desc = '[S]earch: [I]ndex with Zoekt' })
+
+      require('zoekt').setup {
+        use_telescope = true,
+        auto_open_quickfix = true,
+      }
     end,
   },
 
@@ -436,6 +503,8 @@ require('lazy').setup({
         map('v', '<leader>gr', function()
           gs.reset_hunk { vim.fn.line '.', vim.fn.line 'v' }
         end, { desc = 'Reset selected hunk' })
+        -- Toggle Git Blame for the current line
+        map('n', '<leader>gb', gs.toggle_current_line_blame, { desc = '[G]it [B]lame (toggle)' })
       end,
     },
   },
@@ -563,16 +632,17 @@ require('lazy').setup({
       -- [[ Configure Telescope ]]
       -- See `:help telescope` and `:help telescope.setup()`
       require('telescope').setup {
-        -- You can put your default mappings / updates / etc. in here
-        --  All the info you're looking for is in `:help telescope.setup()`
-        --
-        -- defaults = {
-        --   mappings = {
-        --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-        --   },
-        -- },
         defaults = {
           path_display = { 'smart' },
+          vimgrep_arguments = {
+            'rg',
+            '--color=never',
+            '--no-heading',
+            '--with-filename',
+            '--line-number',
+            '--column',
+            '--smart-case',
+          },
         },
         pickers = {
           buffers = {
@@ -581,6 +651,10 @@ require('lazy').setup({
             layout_config = {
               width = 0.9, -- Made wider to accommodate preview
             },
+          },
+          find_files = {
+            hidden = true,
+            no_ignore = false,
           },
         },
         extensions = {
@@ -827,6 +901,9 @@ require('lazy').setup({
             },
           },
         },
+        tailwindcss = {
+          filetypes = { 'typescriptreact', 'javascriptreact', 'css', 'scss', 'html', 'vue' },
+        },
       }
 
       -- Ensure the servers and tools above are installed
@@ -846,33 +923,44 @@ require('lazy').setup({
       })
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
+      -- require('mason-lspconfig').setup {
+      --   ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
+      --   automatic_installation = false,
+      --   handlers = {
+      --     function(server_name)
+      --       local server = servers[server_name] or {}
+      --       -- This handles overriding only values explicitly passed
+      --       -- by the server configuration above. Useful when disabling
+      --       -- certain features of an LSP (for example, turning off formatting for ts_ls)
+      --       server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+      --       require('lspconfig')[server_name].setup(server)
+      --     end,
+      --   },
+      -- }
+
       require('mason-lspconfig').setup {
+        ensure_installed = {
+          'tailwindcss',
+          -- Add other LSP servers you want to ensure are installed
+        },
+        automatic_installation = true,
         handlers = {
           function(server_name)
-            local server = servers[server_name] or {}
-            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+            vim.lsp.enable(server_name)
+          end,
 
-            -- Define a global on_attach function that applies specifically to tsserver
-            server.on_attach = function(client, bufnr)
-              if server_name == 'tsserver' then
-                client.server_capabilities.documentFormattingProvider = false
-                client.server_capabilities.documentRangeFormattingProvider = false
-              end
-              -- Additional setup for other LSP servers can go here if needed
-            end
-
-            require('lspconfig')[server_name].setup(server)
+          -- Server-specific overrides
+          lua_ls = function()
+            vim.lsp.config.lua_ls = {
+              settings = {
+                Lua = {
+                  diagnostics = { globals = { 'vim' } },
+                },
+              },
+            }
+            vim.lsp.enable 'lua_ls'
           end,
         },
-      }
-      require('lspconfig').tailwindcss.setup {
-        on_attach = function(client, bufnr)
-          -- Enable hover functionality and other LSP features
-          local opts = { noremap = true, silent = true }
-          vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
-          -- Add any other key bindings you want for LSP
-        end,
-        filetypes = { 'typescriptreact', 'javascriptreact', 'css', 'scss', 'html', 'vue' },
       }
     end,
   },
@@ -1063,38 +1151,39 @@ require('lazy').setup({
   { -- Collection of various small independent plugins/modules
     'echasnovski/mini.nvim',
     config = function()
-      -- Better Around/Inside textobjects
-      --
-      -- Examples:
-      --  - va)  - [V]isually select [A]round [)]paren
-      --  - yinq - [Y]ank [I]nside [N]ext [Q]uote
-      --  - ci'  - [C]hange [I]nside [']quote
-      require('mini.ai').setup { n_lines = 500 }
-
-      -- Add/delete/replace surroundings (brackets, quotes, etc.)
-      --
-      -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
-      -- - sd'   - [S]urround [D]elete [']quotes
-      -- - sr)'  - [S]urround [R]eplace [)] [']
-      require('mini.surround').setup()
-
-      -- Simple and easy statusline.
-      --  You could remove this setup call if you don't like it,
-      --  and try some other statusline plugin
       local statusline = require 'mini.statusline'
-      -- set use_icons to true if you have a Nerd Font
-      statusline.setup { use_icons = vim.g.have_nerd_font }
+      statusline.setup {
+        use_icons = vim.g.have_nerd_font,
+        content = {
+          active = function()
+            local mode, mode_hl = statusline.section_mode { trunc_width = 120 }
+            local git = statusline.section_git { trunc_width = 75 }
+            local diagnostics = statusline.section_diagnostics { trunc_width = 75 }
+            local filename = statusline.section_filename { trunc_width = 140 }
+            local fileinfo = statusline.section_fileinfo { trunc_width = 120 }
+            local location = statusline.section_location { trunc_width = 75 }
 
-      -- You can configure sections in the statusline by overriding their
-      -- default behavior. For example, here we set the section for
-      -- cursor location to LINE:COLUMN
-      ---@diagnostic disable-next-line: duplicate-set-field
+            -- Modify the git section to only show the last 10 characters
+            if git ~= '' then
+              git = git:sub(-20)
+            end
+
+            return statusline.combine_groups {
+              { hl = mode_hl, strings = { mode } },
+              { hl = 'MiniStatuslineDevinfo', strings = { git, diagnostics } },
+              '%<', -- Mark general truncate point
+              { hl = 'MiniStatuslineFilename', strings = { filename } },
+              '%=', -- End left alignment
+              { hl = 'MiniStatuslineFileinfo', strings = { fileinfo } },
+              { hl = mode_hl, strings = { location } },
+            }
+          end,
+        },
+      }
+
       statusline.section_location = function()
         return '%2l:%-2v'
       end
-
-      -- ... and there is more!
-      --  Check out: https://github.com/echasnovski/mini.nvim
     end,
   },
   { -- Highlight, edit, and navigate code
@@ -1150,9 +1239,9 @@ require('lazy').setup({
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
   -- require 'kickstart.plugins.debug',
-  -- require 'kickstart.plugins.indent_line',
+  require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
-  -- require 'kickstart.plugins.autopairs',
+  require 'kickstart.plugins.autopairs',
   -- require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
@@ -1161,7 +1250,7 @@ require('lazy').setup({
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
   --    For additional information, see `:help lazy.nvim-lazy.nvim-structuring-your-plugins`
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
 }, {
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the
