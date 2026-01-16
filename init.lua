@@ -175,6 +175,12 @@ local supported_adapters = {
     gemini_adapter.env.api_key = os.getenv 'GEMINI_API_KEY'
     return gemini_adapter
   end,
+  deepseek = function()
+    local deepseek_adapter = require('codecompanion.adapters').extend('deepseek', {})
+    -- Read from the environment variable
+    deepseek_adapter.env.api_key = os.getenv 'DEEPSEEK_API_KEY'
+    return deepseek_adapter
+  end,
 }
 
 -- [[ Setting options ]]
@@ -382,10 +388,10 @@ require('lazy').setup({
     opts = {
       strategies = {
         chat = {
-          adapter = 'gemini',
+          adapter = { name = 'gemini', model = 'gemini-3-flash-preview' },
         },
         inline = {
-          adapter = 'gemini',
+          adapter = { name = 'gemini', model = 'gemini-3-flash-preview' },
         },
       },
     },
@@ -412,8 +418,13 @@ require('lazy').setup({
         local gemini_adapter = require('codecompanion.adapters').extend('gemini', {})
         -- Read from the environment variable
         gemini_adapter.env.api_key = os.getenv 'GEMINI_API_KEY'
-        gemini_adapter.model = 'gemini-3-pro-preview' -- Specify the Gemini model
         return gemini_adapter
+      end,
+      deepseek = function()
+        local deepseek_adapter = require('codecompanion.adapters').extend('deepseek', {})
+        -- Read from the environment variable
+        deepseek_adapter.env.api_key = os.getenv 'DEEPSEEK_API_KEY'
+        return deepseek_adapter
       end,
     },
     config = true,
@@ -470,6 +481,10 @@ require('lazy').setup({
       require('zoekt').setup {
         use_telescope = true,
         auto_open_quickfix = true,
+        -- Specify a custom index directory
+        index_dir = vim.fn.expand '~/.local/share/zoekt-index',
+        -- Or use XDG_DATA_HOME if set
+        -- index_dir = (os.getenv('XDG_DATA_HOME') or vim.fn.expand('~/.local/share')) .. '/zoekt-index',
       }
     end,
   },
@@ -594,7 +609,7 @@ require('lazy').setup({
   { -- Fuzzy Finder (files, lsp, etc)
     'nvim-telescope/telescope.nvim',
     event = 'VimEnter',
-    branch = '0.1.x',
+    branch = '0.11.x',
     dependencies = {
       'nvim-lua/plenary.nvim',
       { -- If encountering errors, see telescope-fzf-native README for installation instructions
@@ -1144,7 +1159,7 @@ require('lazy').setup({
       -- Load the colorscheme here.
       -- Like many other themes, this one has different styles, and you could load
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'default'
+      vim.cmd.colorscheme 'tokyonight-moon'
 
       -- You can configure highlights by doing something like:
       vim.cmd.hi 'Comment gui=none'
