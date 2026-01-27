@@ -104,7 +104,23 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 vim.opt.expandtab = true
 vim.opt.rtp:append '/Users/davidmasaka/homebrew/opt/fzf'
-vim.opt.iskeyword:remove '_'
+
+-- Custom navigation that treats _ (and other symbols) as word boundaries
+local function nav_snake_case(motion)
+  return function()
+    local old_iskeyword = vim.opt_local.iskeyword:get()
+    vim.opt_local.iskeyword:remove '_'
+    -- You can remove other characters too if needed
+    -- vim.opt_local.iskeyword:remove('-')
+    vim.cmd('normal! ' .. motion)
+    vim.opt_local.iskeyword = old_iskeyword
+  end
+end
+
+-- Or use alt/meta key combinations (common pattern)
+vim.keymap.set({ 'n', 'v' }, '<M-w>', nav_snake_case 'w')
+vim.keymap.set({ 'n', 'v' }, '<M-b>', nav_snake_case 'b')
+vim.keymap.set({ 'n', 'v' }, '<M-e>', nav_snake_case 'e')
 
 -- remapping esc for lazygit to be double esc
 vim.api.nvim_create_autocmd('TermOpen', {
