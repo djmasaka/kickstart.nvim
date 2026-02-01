@@ -105,6 +105,39 @@ vim.api.nvim_create_autocmd('FileType', {
 vim.opt.expandtab = true
 vim.opt.rtp:append '/Users/davidmasaka/homebrew/opt/fzf'
 
+-- Open current file in a floating terminal window using Glow
+-- vim.keymap.set('n', '<leader>mo', function()
+--   local file = vim.fn.expand '%'
+--   vim.cmd('split | term glow -w 0 ' .. file)
+--
+--   -- This is the key: it tells Neovim "Do not wrap this buffer's lines"
+--   vim.opt_local.wrap = false
+--
+--   -- Optional: Start in terminal mode so you can scroll immediately
+--   vim.cmd 'startinsert'
+-- end, { desc = 'Glow Preview (No Wrap)' })
+
+-- Silent Rerender (No browser launch)
+vim.keymap.set('n', '<leader>mr', function()
+  local file = vim.fn.expand '%'
+  local output = vim.fn.expand '%:r' .. '.html'
+  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css %s -o %s', file, output)
+
+  vim.fn.system(cmd)
+  print('HTML Refreshed: ' .. output)
+end, { desc = 'Pandoc: Silent Refresh' })
+
+-- Render to HTML (GFM) and Open in Browser
+vim.keymap.set('n', '<leader>mp', function()
+  local file = vim.fn.expand '%'
+  local output = vim.fn.expand '%:r' .. '.html'
+  -- -s: standalone, -f gfm: github flavor, -o: output
+  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css %s -o %s && open %s', file, output, output)
+
+  vim.fn.system(cmd)
+  print('Rendered and opened: ' .. output)
+end, { desc = 'Pandoc: Render and Open in Browser' })
+
 -- Custom navigation that treats _ (and other symbols) as word boundaries
 local function nav_snake_case(motion)
   return function()
