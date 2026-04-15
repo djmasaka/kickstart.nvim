@@ -104,6 +104,7 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 vim.opt.expandtab = true
 vim.opt.rtp:append '/Users/davidmasaka/homebrew/opt/fzf'
+vim.opt.smoothscroll = true
 
 -- Open current file in a floating terminal window using Glow
 -- vim.keymap.set('n', '<leader>mo', function()
@@ -154,6 +155,8 @@ end
 vim.keymap.set({ 'n', 'v' }, '<M-w>', nav_snake_case 'w')
 vim.keymap.set({ 'n', 'v' }, '<M-b>', nav_snake_case 'b')
 vim.keymap.set({ 'n', 'v' }, '<M-e>', nav_snake_case 'e')
+-- Alt+Backspace deletes previous word in insert mode
+vim.keymap.set('i', '<M-BS>', '<C-w>', { noremap = true, silent = true })
 
 -- remapping esc for lazygit to be double esc
 vim.api.nvim_create_autocmd('TermOpen', {
@@ -294,7 +297,7 @@ vim.opt.inccommand = 'split'
 vim.opt.cursorline = true
 
 -- Minimal number of screen lines to keep above and below the cursor.
-vim.opt.scrolloff = 10
+vim.opt.scrolloff = 5
 
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
@@ -530,10 +533,7 @@ require('lazy').setup({
       require('zoekt').setup {
         use_telescope = true,
         auto_open_quickfix = true,
-        -- Specify a custom index directory
-        index_dir = vim.fn.expand '~/.local/share/zoekt-index',
-        -- Or use XDG_DATA_HOME if set
-        -- index_dir = (os.getenv('XDG_DATA_HOME') or vim.fn.expand('~/.local/share')) .. '/zoekt-index',
+        index_path = vim.fn.expand '~/.local/share/zoekt-index',
       }
     end,
   },
@@ -563,11 +563,11 @@ require('lazy').setup({
 
         -- Keybindings for line/hunk operations
         map('n', ']c', function()
-          gs.next_hunk()
-        end, { desc = 'Next Git change' })
+          gs.nav_hunk('next', { target = 'all' })
+        end, { desc = 'Next Git change (staged + unstaged)' })
         map('n', '[c', function()
-          gs.prev_hunk()
-        end, { desc = 'Previous Git change' })
+          gs.nav_hunk('prev', { target = 'all' })
+        end, { desc = 'Previous Git change (staged + unstaged)' })
         map('n', '<leader>gu', gs.undo_stage_hunk, { desc = 'Undo last hunk stage' })
         map('n', '<leader>gr', gs.reset_hunk, { desc = 'Reset current hunk' })
         map('v', '<leader>gr', function()
@@ -702,7 +702,7 @@ require('lazy').setup({
       -- See `:help telescope` and `:help telescope.setup()`
       require('telescope').setup {
         defaults = {
-          path_display = { 'smart' },
+          path_display = { 'filename_first' },
           vimgrep_arguments = {
             'rg',
             '--color=never',
