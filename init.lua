@@ -106,6 +106,11 @@ vim.opt.expandtab = true
 vim.opt.rtp:append '/Users/davidmasaka/homebrew/opt/fzf'
 vim.opt.smoothscroll = true
 
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.breakindent = true
+vim.opt.showbreak = '↪ '
+
 -- Open current file in a floating terminal window using Glow
 -- vim.keymap.set('n', '<leader>mo', function()
 --   local file = vim.fn.expand '%'
@@ -170,6 +175,32 @@ vim.api.nvim_create_autocmd('TermOpen', {
     else
       -- Default behavior for other terminals
       vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { buffer = true, desc = 'Exit terminal mode' })
+    end
+  end,
+})
+
+-- Allow opening files with a trailing :line or :line:col suffix,
+-- e.g. `:e apps/cli/src/commands/salesforce/test_query.rs:163`.
+-- When such a (non-existent) buffer is created, jump to the real file
+-- at that line/column and discard the bogus buffer.
+vim.api.nvim_create_autocmd('BufNewFile', {
+  pattern = '*:[0-9]*',
+  callback = function(args)
+    local name = args.file
+    -- Grab the path and the first line number after the colon, ignoring
+    -- anything trailing it (`:163`, `:163:10`, `:163-169` all -> line 163).
+    local file, line = name:match '^(.-):(%d+)'
+    local col = name:match '^.-:%d+:(%d+)'
+    if file and vim.fn.filereadable(file) == 1 then
+      local bogus = args.buf
+      vim.schedule(function()
+        vim.cmd('keepalt edit ' .. vim.fn.fnameescape(file))
+        local lnum = tonumber(line)
+        local cnum = tonumber(col)
+        pcall(vim.api.nvim_win_set_cursor, 0, { lnum, (cnum and cnum > 0 and cnum - 1) or 0 })
+        vim.cmd 'normal! zz'
+        pcall(vim.api.nvim_buf_delete, bogus, { force = true })
+      end)
     end
   end,
 })
@@ -1257,45 +1288,123 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    -- The `main` branch is the only one compatible with Neovim 0.11+/0.12.
+    -- The old `master` branch (and its `configs`/`opts` API) is deprecated and
+    -- crashes on 0.12 (`attempt to call method 'range'` in the highlighter).
+    branch = 'main',
+    lazy = false,
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = {
+    config = function()
+      local ts = require 'nvim-treesitter'
+
+      -- Parsers to keep installed. `hurl` + `graphql` are here because .hurl
+      -- files embed GraphQL blocks via treesitter language injection.
+      ts.install {
         'bash',
         'c',
+        'css',
         'diff',
+        'graphql',
         'html',
+        'hurl',
+        'javascript',
+        'json',
         'lua',
         'luadoc',
         'markdown',
         'markdown_inline',
         'query',
+        'tsx',
+        'typescript',
         'vim',
         'vimdoc',
-        'javascript',
-        'typescript',
-        'json',
-        'css',
-        'tsx',
-      },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
-    -- There are additional nvim-treesitter modules that you can use to interact
-    -- with nvim-treesitter. You should go explore a few and see what interests you:
-    --
-    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-    --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-    --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+      }
+
+      -- On the `main` branch highlighting/indent are no longer plugin "modules";
+      -- you start them per-buffer. This autocmd does that, and auto-installs any
+      -- parser that isn't present yet (highlighting then applies on next open).
+      vim.api.nvim_create_autocmd('FileType', {
+        desc = 'Enable treesitter highlighting and indentation',
+        callback = function(args)
+          local buf = args.buf
+          local lang = vim.treesitter.language.get_lang(vim.bo[buf].filetype)
+          if not lang then
+            return
+          end
+          if vim.treesitter.language.add(lang) then
+            vim.treesitter.start(buf, lang)
+            -- Experimental treesitter-based indent; remove this line if any
+            -- filetype starts indenting oddly.
+            vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          else
+            ts.install { lang }
+          end
+        end,
+      })
+    end,
+    -- Note: on `main`, incremental selection / indent modules were removed.
+  },
+
+  { -- Treesitter-aware text objects (select/move/swap by function, class, arg, ...)
+    'nvim-treesitter/nvim-treesitter-textobjects',
+    branch = 'main',
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    event = 'VeryLazy',
+    config = function()
+      require('nvim-treesitter-textobjects').setup {
+        select = { lookahead = true },
+        move = { set_jumps = true }, -- record jumps so <C-o>/<C-i> work
+      }
+
+      local select = require 'nvim-treesitter-textobjects.select'
+      local move = require 'nvim-treesitter-textobjects.move'
+      local swap = require 'nvim-treesitter-textobjects.swap'
+
+      -- Select: e.g. `cif` = change inner function, `daf` = delete a function.
+      local selects = {
+        ['af'] = '@function.outer',
+        ['if'] = '@function.inner',
+        ['ac'] = '@class.outer',
+        ['ic'] = '@class.inner',
+        ['aa'] = '@parameter.outer', -- a(rgument)
+        ['ia'] = '@parameter.inner',
+      }
+      for key, capture in pairs(selects) do
+        vim.keymap.set({ 'x', 'o' }, key, function()
+          select.select_textobject(capture, 'textobjects')
+        end, { desc = 'TS select ' .. capture })
+      end
+
+      -- Move: jump between functions/classes/arguments.
+      -- Note: `]c`/`[c` are intentionally left to gitsigns (next/prev hunk).
+      -- Classes use the canonical `]]`/`[[` (start) and `][`/`[]` (end).
+      local moves = {
+        [']f'] = { move.goto_next_start, '@function.outer' },
+        ['[f'] = { move.goto_previous_start, '@function.outer' },
+        [']F'] = { move.goto_next_end, '@function.outer' },
+        ['[F'] = { move.goto_previous_end, '@function.outer' },
+        [']a'] = { move.goto_next_start, '@parameter.inner' },
+        ['[a'] = { move.goto_previous_start, '@parameter.inner' },
+        [']]'] = { move.goto_next_start, '@class.outer' },
+        ['[['] = { move.goto_previous_start, '@class.outer' },
+        [']['] = { move.goto_next_end, '@class.outer' },
+        ['[]'] = { move.goto_previous_end, '@class.outer' },
+      }
+      for key, spec in pairs(moves) do
+        vim.keymap.set({ 'n', 'x', 'o' }, key, function()
+          spec[1](spec[2], 'textobjects')
+        end, { desc = 'TS move ' .. spec[2] })
+      end
+
+      -- Swap the argument under the cursor with the next/previous one.
+      vim.keymap.set('n', '<leader>sa', function()
+        swap.swap_next '@parameter.inner'
+      end, { desc = '[S]wap [a]rgument next' })
+      vim.keymap.set('n', '<leader>sA', function()
+        swap.swap_previous '@parameter.inner'
+      end, { desc = '[S]wap [A]rgument previous' })
+    end,
   },
 
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
