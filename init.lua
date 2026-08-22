@@ -479,6 +479,23 @@ require('lazy').setup({
       },
     },
     adapters = {
+      glm52 = function()
+        return require('codecompanion.adapters').extend('openai_compatible', {
+          name = 'glm52',
+          env = {
+            url = 'https://api.z.ai/api/paas/v4',
+            -- Pass the STRING name of your env var; CodeCompanion reads it safely
+            api_key = 'ZAI_API_KEY',
+            -- Required for the openai_compatible adapter
+            chat_url = '/chat/completions',
+          },
+          schema = {
+            model = {
+              default = 'glm-5.2',
+            },
+          },
+        })
+      end,
       openai = function()
         local openai_adapter = require('codecompanion.adapters').extend('openai', {})
         -- Read from the environment variable
@@ -1301,12 +1318,19 @@ require('lazy').setup({
       -- Parsers to keep installed. `hurl` + `graphql` are here because .hurl
       -- files embed GraphQL blocks via treesitter language injection.
       ts.install {
+        'asm',
         'bash',
         'c',
         'css',
+        'csv',
         'diff',
+        'gitignore',
+        'go',
+        'gomod',
+        'gosum',
         'graphql',
         'html',
+        'htmldjango',
         'hurl',
         'javascript',
         'json',
@@ -1314,11 +1338,19 @@ require('lazy').setup({
         'luadoc',
         'markdown',
         'markdown_inline',
+        'php',
+        'python',
         'query',
+        'rust',
+        'scss',
+        'sql',
+        'svelte',
+        'toml',
         'tsx',
         'typescript',
         'vim',
         'vimdoc',
+        'yaml',
       }
 
       -- On the `main` branch highlighting/indent are no longer plugin "modules";
@@ -1328,16 +1360,29 @@ require('lazy').setup({
         desc = 'Enable treesitter highlighting and indentation',
         callback = function(args)
           local buf = args.buf
+          -- Plugin UI scratch buffers (fidget's LSP-progress window, etc.) have
+          -- a filetype but no parser; `get_lang` echoes the filetype back, so
+          -- skip anything that isn't a real file buffer.
+          if vim.bo[buf].buftype ~= '' then
+            return
+          end
           local lang = vim.treesitter.language.get_lang(vim.bo[buf].filetype)
           if not lang then
             return
           end
-          if vim.treesitter.language.add(lang) then
+          -- A parser alone isn't enough: `vim.treesitter.start` clears 'syntax',
+          -- so starting it without a highlights query leaves the buffer with no
+          -- highlighting at all (this is how stale parsers left over from the
+          -- old `master` branch silently broke yaml). Require both.
+          local has_queries = vim.treesitter.language.add(lang) and pcall(vim.treesitter.query.get, lang, 'highlights') and vim.treesitter.query.get(lang, 'highlights') ~= nil
+          if has_queries then
             vim.treesitter.start(buf, lang)
             -- Experimental treesitter-based indent; remove this line if any
             -- filetype starts indenting oddly.
             vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
-          else
+          elseif vim.tbl_contains(require('nvim-treesitter.config').get_available(), lang) then
+            -- Only ask to install languages nvim-treesitter actually ships a
+            -- parser for; otherwise it warns "skipping unsupported language".
             ts.install { lang }
           end
         end,
@@ -1416,7 +1461,7 @@ require('lazy').setup({
   --  Here are some example plugins that I've included in the Kickstart repository.
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
-  -- require 'kickstart.plugins.debug',
+  require 'kickstart.plugins.debug',
   require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
   require 'kickstart.plugins.autopairs',

@@ -64,6 +64,7 @@ return {
       ensure_installed = {
         -- Update this to ensure that you have the debuggers for the langs you want
         'delve',
+        'codelldb',
       },
     }
 
@@ -112,6 +113,99 @@ return {
         -- See https://github.com/leoluz/nvim-dap-go/blob/main/README.md#configuring
         detached = vim.fn.has 'win32' == 0,
       },
+    }
+
+    -- [[ Rust / C / C++ via codelldb ]] --------------------------------------
+    --
+    -- codelldb speaks DAP over a TCP socket: nvim-dap launches the binary with
+    -- a port it picked, then connects to it.
+    dap.adapters.codelldb = {
+      type = 'server',
+      port = '${port}',
+      executable = {
+        command = vim.fn.stdpath 'data' .. '/mason/bin/codelldb',
+        args = { '--port', '${port}' },
+      },
+    }
+
+    -- Rust's stdlib ships LLDB pretty-printers, without which a `String` shows
+    -- up as a raw struct of pointers instead of its text. Load them per-session.
+    local function rust_init_commands()
+      local sysroot = vim.fn.system('rustc --print sysroot'):gsub('%s+$', '')
+      if vim.v.shell_error ~= 0 or sysroot == '' then
+        return {}
+      end
+      local etc = sysroot .. '/lib/rustlib/etc'
+      return {
+        'command script import "' .. etc .. '/lldb_lookup.py"',
+        'command source -s 0 "' .. etc .. '/lldb_commands"',
+      }
+    end
+
+    -- Build with cargo and return the path of the executable it produced.
+    -- `--message-format=json` makes cargo report each artifact it emits, so we
+    -- never have to guess at `target/debug/<name>` or invoke rustc by hand.
+    --
+    -- Runs inside nvim-dap's coroutine, so `vim.ui.select` can block on a
+    -- choice when a crate builds more than one binary.
+    local function cargo_artifact(args)
+      local root = vim.fs.root(0, { 'Cargo.toml' })
+      if not root then
+        error 'not inside a cargo project (no Cargo.toml found)'
+      end
+
+      local cmd = vim.list_extend({ 'cargo', 'build', '--message-format=json' }, args)
+      vim.notify('Running: ' .. table.concat(cmd, ' '), vim.log.levels.INFO)
+      local out = vim.system(cmd, { cwd = root, text = true }):wait()
+
+      local exes = {}
+      for line in vim.gsplit(out.stdout or '', '\n', { trimempty = true }) do
+        local ok, msg = pcall(vim.json.decode, line)
+        -- `executable` is JSON null (vim.NIL) for lib crates and rmeta artifacts.
+        if ok and msg.reason == 'compiler-artifact' and type(msg.executable) == 'string' then
+          table.insert(exes, msg.executable)
+        end
+      end
+
+      if #exes == 0 then
+        error('cargo produced no executable:\n' .. (out.stderr or ''))
+      elseif #exes == 1 then
+        return exes[1]
+      end
+
+      local co = coroutine.running()
+      vim.ui.select(exes, { prompt = 'Which binary to debug?' }, function(choice)
+        coroutine.resume(co, choice)
+      end)
+      return coroutine.yield() or error 'no binary selected'
+    end
+
+    local function rust_config(name, build_args)
+      return {
+        name = name,
+        type = 'codelldb',
+        request = 'launch',
+        program = function()
+          return cargo_artifact(build_args)
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        -- codelldb's own key (not vscode's `console`): send the debuggee's
+        -- stdout/stdin to a real terminal buffer so `println!` is visible and
+        -- stdin works. Use 'console' instead if you don't need input.
+        terminal = 'integrated',
+        initCommands = rust_init_commands,
+        -- Prompted for at launch; leave blank for none.
+        args = function()
+          return vim.split(vim.fn.input 'Program args: ', ' ', { trimempty = true })
+        end,
+      }
+    end
+
+    dap.configurations.rust = {
+      rust_config('Debug binary (cargo build)', {}),
+      rust_config('Debug unit tests (cargo test --no-run)', { '--tests' }),
+      rust_config('Debug release binary', { '--release' }),
     }
   end,
 }
