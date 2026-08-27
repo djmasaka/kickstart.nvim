@@ -1,0 +1,24 @@
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  // Pandoc writes a ```mermaid fence as <pre class="mermaid"><code>...</code></pre>,
+  // but depending on the highlighting path it can also land as
+  // <div class="sourceCode"><pre><code class="language-mermaid">...</code></pre></div>.
+  // Normalize both shapes into a bare <pre class="mermaid"> holding raw text.
+  for (const code of document.querySelectorAll('code.language-mermaid, code.mermaid')) {
+    const pre = document.createElement('pre');
+    pre.className = 'mermaid';
+    pre.textContent = code.textContent;
+    const outer = code.closest('div.sourceCode') || code.closest('pre') || code;
+    outer.replaceWith(pre);
+  }
+  for (const pre of document.querySelectorAll('pre.mermaid')) {
+    pre.textContent = pre.textContent; // drop any highlight spans / nested <code>
+  }
+
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default', // matches the light background in markdown.css
+    fontFamily: "'SF Mono', Menlo, monospace",
+  });
+</script>

@@ -127,7 +127,7 @@ vim.opt.showbreak = '↪ '
 vim.keymap.set('n', '<leader>mr', function()
   local file = vim.fn.expand '%'
   local output = vim.fn.expand '%:r' .. '.html'
-  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css %s -o %s', file, output)
+  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css -A ~/.config/nvim/mermaid.html %s -o %s', file, output)
 
   vim.fn.system(cmd)
   print('HTML Refreshed: ' .. output)
@@ -138,7 +138,7 @@ vim.keymap.set('n', '<leader>mp', function()
   local file = vim.fn.expand '%'
   local output = vim.fn.expand '%:r' .. '.html'
   -- -s: standalone, -f gfm: github flavor, -o: output
-  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css %s -o %s && open %s', file, output, output)
+  local cmd = string.format('pandoc -s -f gfm -c ~/.config/nvim/markdown.css -A ~/.config/nvim/mermaid.html %s -o %s && open %s', file, output, output)
 
   vim.fn.system(cmd)
   print('Rendered and opened: ' .. output)
@@ -479,23 +479,6 @@ require('lazy').setup({
       },
     },
     adapters = {
-      glm52 = function()
-        return require('codecompanion.adapters').extend('openai_compatible', {
-          name = 'glm52',
-          env = {
-            url = 'https://api.z.ai/api/paas/v4',
-            -- Pass the STRING name of your env var; CodeCompanion reads it safely
-            api_key = 'ZAI_API_KEY',
-            -- Required for the openai_compatible adapter
-            chat_url = '/chat/completions',
-          },
-          schema = {
-            model = {
-              default = 'glm-5.2',
-            },
-          },
-        })
-      end,
       openai = function()
         local openai_adapter = require('codecompanion.adapters').extend('openai', {})
         -- Read from the environment variable
@@ -980,6 +963,68 @@ require('lazy').setup({
       --  So, we create new capabilities with nvim cmp, and then broadcast that to the servers.
       local capabilities = vim.lsp.protocol.make_client_capabilities()
       capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
+
+      -- Share ONE rust-analyzer across all git worktrees of
+      -- elevation-church-backend: every worktree buffer reports the same
+      -- root_dir, so lspmux routes all nvim processes to a single shared
+      -- instance, and that instance indexes every worktree via
+      -- linkedProjects. Requires `lspmux server` to be running.
+      -- New worktrees are picked up on the next nvim + instance restart.
+      -- Only active on machines that have the repo + lspmux (work laptop);
+      -- everywhere else rust-analyzer keeps its stock per-project behavior.
+      local ec_repo = vim.fn.expand '~/Work/elevation-church-backend'
+      local lspmux_bin = vim.fn.expand '~/.cargo/bin/lspmux'
+      if vim.uv.fs_stat(ec_repo) and vim.fn.executable(lspmux_bin) == 1 then
+        local shared_root = vim.fn.expand '~/Work'
+
+        -- Worktree checkouts of the backend repo, discovered from git so
+        -- the list never needs hand-maintenance.
+        local worktree_roots = {}
+        local linked_projects = {}
+        for _, line in ipairs(vim.fn.systemlist('git -C ' .. vim.fn.shellescape(ec_repo) .. ' worktree list --porcelain')) do
+          local path = line:match '^worktree (.+)'
+          if path and vim.uv.fs_stat(path .. '/Cargo.toml') then
+            table.insert(worktree_roots, path)
+            table.insert(linked_projects, path .. '/Cargo.toml')
+          end
+        end
+
+        vim.lsp.config('rust_analyzer', {
+          -- Mason's rust-analyzer is a real standalone binary; ~/.cargo/bin/rust-analyzer
+          -- is a rustup shim that fails to resolve outside a toolchain dir.
+          cmd = { lspmux_bin, 'client', '--server-path', vim.fn.expand '~/.local/share/nvim/mason/bin/rust-analyzer' },
+          capabilities = capabilities,
+          root_dir = function(bufnr, on_dir)
+            local fname = vim.api.nvim_buf_get_name(bufnr)
+            for _, root in ipairs(worktree_roots) do
+              if vim.startswith(fname, root .. '/') then
+                return on_dir(shared_root)
+              end
+            end
+            -- Dependency sources (go-to-definition into ~/.cargo or rustup
+            -- std sources) are already in the shared instance's crate graph;
+            -- attach them there instead of spawning a per-crate instance.
+            if vim.startswith(fname, vim.fn.expand '~/.cargo/registry/') or vim.startswith(fname, vim.fn.expand '~/.rustup/toolchains/') then
+              return on_dir(shared_root)
+            end
+            -- Rust files outside the backend worktrees get a normal
+            -- per-project root (and thus their own instance).
+            on_dir(vim.fs.root(bufnr, { 'Cargo.toml', '.git' }))
+          end,
+          settings = {
+            ['rust-analyzer'] = {
+              linkedProjects = linked_projects,
+            },
+          },
+          -- linkedProjects is only meant for the shared instance; strip it
+          -- for per-project instances of unrelated rust code.
+          before_init = function(_, config)
+            if config.root_dir ~= shared_root then
+              config.settings = { ['rust-analyzer'] = {} }
+            end
+          end,
+        })
+      end
 
       -- Enable the following language servers
       --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
