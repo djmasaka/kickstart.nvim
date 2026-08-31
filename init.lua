@@ -1624,5 +1624,9 @@ vim.api.nvim_create_user_command('CodeCompanionSave', function(opts)
   save_file:write(table.concat(lines, '\n'), 'w')
 end, { nargs = '*' })
 
+-- Keep Session.vim in the cwd up to date so tmux-resurrect can restore every
+-- buffer after a crash. See lua/custom/session.lua.
+require('custom.session').setup()
+
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
