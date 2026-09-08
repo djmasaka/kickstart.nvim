@@ -1066,6 +1066,15 @@ require('lazy').setup({
         tailwindcss = {
           filetypes = { 'typescriptreact', 'javascriptreact', 'css', 'scss', 'html', 'vue' },
         },
+        jsonls = {
+          -- Schema-aware completion/diagnostics. Formatting is left to conform
+          -- (prettierd) -- jsonls collapses blank lines and explodes arrays.
+          settings = {
+            json = {
+              validate = { enable = true },
+            },
+          },
+        },
       }
 
       -- Ensure the servers and tools above are installed
@@ -1169,6 +1178,8 @@ require('lazy').setup({
         typescript = { 'prettierd', 'prettier', stop_after_first = true },
         typescriptreact = { 'prettierd', 'prettier', stop_after_first = true },
         scss = { 'prettierd', 'prettier', stop_after_first = true },
+        json = { 'prettierd', 'prettier', stop_after_first = true },
+        jsonc = { 'prettierd', 'prettier', stop_after_first = true },
       },
     },
   },
