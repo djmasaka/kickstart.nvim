@@ -111,6 +111,9 @@ vim.opt.linebreak = true
 vim.opt.breakindent = true
 vim.opt.showbreak = '↪ '
 
+-- Diff mode (`nvim -d`, i.e. `git difftool`) forces 'wrap' off unless told not to.
+vim.opt.diffopt:append 'followwrap'
+
 -- Open current file in a floating terminal window using Glow
 -- vim.keymap.set('n', '<leader>mo', function()
 --   local file = vim.fn.expand '%'
@@ -162,6 +165,117 @@ vim.keymap.set({ 'n', 'v' }, '<M-b>', nav_snake_case 'b')
 vim.keymap.set({ 'n', 'v' }, '<M-e>', nav_snake_case 'e')
 -- Alt+Backspace deletes previous word in insert mode
 vim.keymap.set('i', '<M-BS>', '<C-w>', { noremap = true, silent = true })
+
+-- Fold comment blocks -------------------------------------------------------
+-- Collect the 1-indexed lines that are nothing but comment. Treesitter is used
+-- when a parser is available (it knows block comments and injected languages);
+-- otherwise fall back to matching the buffer's 'commentstring' prefix.
+local function comment_lines()
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local marked = {}
+
+  -- Only count a comment when nothing but whitespace precedes it, so a trailing
+  -- comment (`local x = 1 -- note`) never drags its line into a fold.
+  local function mark(srow, scol, erow, ecol)
+    local first = lines[srow + 1]
+    if not (first and first:sub(1, scol):match '^%s*$') then
+      return
+    end
+    if ecol == 0 then
+      erow = erow - 1
+    end
+    for l = srow, erow do
+      marked[l + 1] = true
+    end
+  end
+
+  local ok, parser = pcall(vim.treesitter.get_parser, 0)
+  if ok and parser then
+    parser:parse(true)
+    local function walk(ltree)
+      local query = vim.treesitter.query.get(ltree:lang(), 'highlights')
+      if query then
+        for _, tree in pairs(ltree:trees()) do
+          for id, node in query:iter_captures(tree:root(), 0) do
+            if query.captures[id]:find '^comment' then
+              mark(node:range())
+            end
+          end
+        end
+      end
+      for _, child in pairs(ltree:children()) do
+        walk(child)
+      end
+    end
+    walk(parser)
+  end
+
+  if next(marked) == nil then
+    -- '-- %s' -> '--', '<!-- %s -->' -> '<!--'
+    local left = (vim.bo.commentstring or ''):match '^(.-)%%s'
+    left = left and vim.trim(left) or ''
+    if left == '' then
+      return marked
+    end
+    local pattern = '^%s*' .. vim.pesc(left)
+    for i, line in ipairs(lines) do
+      if line:find(pattern) then
+        marked[i] = true
+      end
+    end
+  end
+
+  return marked
+end
+
+-- Group the marked lines into contiguous runs big enough to be worth folding.
+local function comment_blocks()
+  local marked = comment_lines()
+  local blocks, start = {}, nil
+  for i = 1, vim.api.nvim_buf_line_count(0) + 1 do
+    if marked[i] then
+      start = start or i
+    elseif start then
+      if i - start >= 2 then
+        table.insert(blocks, { start, i - 1 })
+      end
+      start = nil
+    end
+  end
+  return blocks
+end
+
+-- First call folds every comment block, the next one opens them back up.
+local function fold_comments()
+  local blocks = comment_blocks()
+  if #blocks == 0 then
+    vim.notify('No comment blocks found', vim.log.levels.INFO)
+    return
+  end
+
+  vim.wo.foldmethod = 'manual'
+  vim.wo.foldenable = true
+
+  local opening = vim.b.comment_folds_closed == true
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  for _, block in ipairs(blocks) do
+    local first, last = block[1], block[2]
+    if opening then
+      pcall(vim.cmd, string.format('silent! %d,%dfoldopen', first, last))
+    elseif vim.fn.foldlevel(first) == 0 then
+      pcall(vim.cmd, string.format('silent! %d,%dfold', first, last))
+    else
+      pcall(vim.cmd, string.format('silent! %d,%dfoldclose', first, last))
+    end
+  end
+  vim.b.comment_folds_closed = not opening
+  pcall(vim.api.nvim_win_set_cursor, 0, cursor)
+
+  vim.notify(string.format('%s %d comment block%s', opening and 'Opened' or 'Folded', #blocks, #blocks == 1 and '' or 's'))
+end
+
+vim.keymap.set('n', '<leader>cf', fold_comments, { desc = '[C]omments: [F]old toggle' })
+vim.api.nvim_create_user_command('FoldComments', fold_comments, { desc = 'Toggle folds over comment blocks' })
 
 -- remapping esc for lazygit to be double esc
 vim.api.nvim_create_autocmd('TermOpen', {
